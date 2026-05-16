@@ -7,25 +7,24 @@ import { useLocalStorage } from '@/lib/useLocalStorage'
 import { WeeklyView } from '@/components/WeeklyView'
 import { RoadmapView } from '@/components/RoadmapView'
 import { ReflectionView } from '@/components/ReflectionView'
+import { ReadinessView } from '@/components/ReadinessView'
+import { computeReadiness } from '@/lib/readiness'
 
 const INITIAL_STATE: AppState = {
   weeks: {},
   reflections: {},
   roadmap: DEFAULT_ROADMAP,
+  gates: {},
+  leetcodeCount: 0,
+  ragModulesCount: 0,
 }
 
-type Tab = 'weekly' | 'roadmap' | 'reflect'
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'weekly', label: 'This week', icon: '▦' },
-  { id: 'roadmap', label: 'Roadmap', icon: '◎' },
-  { id: 'reflect', label: 'Reflect', icon: '◇' },
-]
+type Tab = 'weekly' | 'readiness' | 'roadmap' | 'reflect'
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('weekly')
+  const [tab, setTab] = useState<Tab>('readiness')
   const [state, setState, loaded] = useLocalStorage<AppState>(
-    'career-command-center-v1',
+    'career-command-center-v2',
     INITIAL_STATE
   )
 
@@ -37,43 +36,63 @@ export default function App() {
     )
   }
 
+  const report = computeReadiness(state)
+
+  const TABS: { id: Tab; label: string; alert?: boolean }[] = [
+    { id: 'weekly', label: 'This week' },
+    { id: 'readiness', label: 'Readiness', alert: report.overdueGates.length > 0 },
+    { id: 'roadmap', label: 'Roadmap' },
+    { id: 'reflect', label: 'Reflect' },
+  ]
+
+  const levelDot = {
+    not_ready: 'bg-stone-400',
+    foundation_building: 'bg-amber-400',
+    tier2_ready: 'bg-violet-500',
+    tier1_ready: 'bg-emerald-500',
+  }[report.level]
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-stone-100 px-4 pt-6 pb-4 sticky top-0 bg-white/90 backdrop-blur-sm z-10">
+      <header className="border-b border-stone-100 px-4 pt-5 pb-0 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-base font-medium text-stone-900">Command Center</h1>
               <p className="text-xs text-stone-400 font-mono">michaelebelle.dev</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-stone-400">Target exit</p>
-              <p className="text-xs font-mono font-medium text-stone-900">Q1–Q2 2027</p>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${levelDot}`} />
+              <div className="text-right">
+                <p className={`text-xs font-medium ${report.color}`}>{report.label}</p>
+                <p className="text-xs text-stone-400 font-mono">Exit target: Q1 2027</p>
+              </div>
             </div>
           </div>
-          {/* Tab nav */}
-          <div className="flex gap-1 bg-stone-50 p-1 rounded-xl">
-            {TABS.map((t) => (
+          <div className="flex gap-0.5">
+            {TABS.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                className={`relative flex-1 py-2.5 text-sm font-medium transition-all border-b-2 ${
                   tab === t.id
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-500 hover:text-stone-700'
+                    ? 'text-stone-900 border-stone-900'
+                    : 'text-stone-400 border-transparent hover:text-stone-600'
                 }`}
               >
                 {t.label}
+                {t.alert && (
+                  <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                )}
               </button>
             ))}
           </div>
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
         {tab === 'weekly' && <WeeklyView state={state} onChange={setState} />}
+        {tab === 'readiness' && <ReadinessView state={state} onChange={setState} />}
         {tab === 'roadmap' && <RoadmapView state={state} onChange={setState} />}
         {tab === 'reflect' && <ReflectionView state={state} onChange={setState} />}
       </main>

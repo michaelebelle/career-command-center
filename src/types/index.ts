@@ -20,9 +20,9 @@ export interface WeekState {
 }
 
 export interface Reflection {
-  energy: number       // 1–5
-  burnout: number      // 1–5
-  confidence: number   // 1–5
+  energy: number
+  burnout: number
+  confidence: number
   win: string
   adjustment: string
 }
@@ -37,10 +37,25 @@ export interface RoadmapProgress {
   exitFund: number
 }
 
+// Gate milestone — concrete, binary, trackable
+export interface Gate {
+  id: string
+  label: string
+  description: string
+  category: 'leetcode' | 'rag' | 'portfolio' | 'network' | 'apply' | 'wells' | 'omscs'
+  tier: 'foundation' | 'tier2_ready' | 'tier1_ready'
+  targetDate: string        // ISO date string
+  hardDeadline: string      // ISO — if missed, sends alert
+  done: boolean
+}
+
 export interface AppState {
   weeks: Record<string, WeekState>
   reflections: Record<string, Reflection>
   roadmap: RoadmapProgress
+  gates: Record<string, boolean>   // gateId -> done
+  leetcodeCount: number            // exact count — key signal
+  ragModulesCount: number          // exact count of DL.AI modules done
 }
 
 export interface Milestone {
