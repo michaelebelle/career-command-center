@@ -13,10 +13,12 @@ export interface Task {
   name: string
   target: string
   priority: Priority
+  targetCount?: number   // how many times to check off before "done" (default 1)
 }
 
 export interface WeekState {
-  completed: Record<string, boolean>
+  // number = count done; boolean kept for backward-compat with v1 localStorage
+  completed: Record<string, number | boolean>
 }
 
 export interface Reflection {

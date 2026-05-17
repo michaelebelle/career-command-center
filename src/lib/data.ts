@@ -4,9 +4,9 @@ export const TASKS: Task[] = [
   // Career Prep
   { id: 'lc-weekly', category: 'career', name: 'LeetCode mediums', target: '4–5 problems', priority: 'critical' },
   { id: 'rag-course', category: 'career', name: 'DL.AI RAG course module', target: '1 module or 1 hr journal app', priority: 'critical' },
-  { id: 'journal-session', category: 'career', name: 'Journal app dev session', target: '2 sessions × 45 min', priority: 'critical' },
+  { id: 'journal-session', category: 'career', name: 'Journal app dev session', target: '2 sessions × 45 min', priority: 'critical', targetCount: 2 },
   { id: 'chip-huyen', category: 'career', name: 'Chip Huyen / ML system design', target: '1 chapter or 30 min', priority: 'high' },
-  { id: 'outreach', category: 'career', name: 'Warm outreach to ML engineers', target: '2–3 DMs', priority: 'high' },
+  { id: 'outreach', category: 'career', name: 'Warm outreach to ML engineers', target: '2–3 DMs', priority: 'high', targetCount: 3 },
   { id: 'mock-interview', category: 'career', name: 'Mock interview', target: '1 per month', priority: 'medium' },
 
   // Wells Fargo
@@ -20,8 +20,8 @@ export const TASKS: Task[] = [
   { id: 'omscs-hw', category: 'omscs', name: 'CS 7641 coursework', target: '8–10 hrs/week (Sep+)', priority: 'high' },
 
   // Fitness
-  { id: 'muay-thai', category: 'fitness', name: 'Muay Thai / BJJ sessions', target: '2–3 sessions', priority: 'high' },
-  { id: 'lifting', category: 'fitness', name: 'Lifting', target: '3 sessions', priority: 'high' },
+  { id: 'muay-thai', category: 'fitness', name: 'Muay Thai / BJJ sessions', target: '2–3 sessions', priority: 'high', targetCount: 3 },
+  { id: 'lifting', category: 'fitness', name: 'Lifting', target: '3 sessions', priority: 'high', targetCount: 3 },
   { id: 'rest', category: 'fitness', name: 'Full rest day', target: 'At least 1 — non-negotiable', priority: 'high' },
 
   // Projects
