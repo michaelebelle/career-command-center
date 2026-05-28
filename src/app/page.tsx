@@ -8,6 +8,7 @@ import { WeeklyView } from '@/components/WeeklyView'
 import { RoadmapView } from '@/components/RoadmapView'
 import { ReflectionView } from '@/components/ReflectionView'
 import { ReadinessView } from '@/components/ReadinessView'
+import { ChallengeView } from '@/components/ChallengeView'
 import { computeReadiness } from '@/lib/readiness'
 
 const INITIAL_STATE: AppState = {
@@ -17,9 +18,10 @@ const INITIAL_STATE: AppState = {
   gates: {},
   leetcodeCount: 0,
   ragModulesCount: 0,
+  challenge: { startDate: null, daily: {}, weekly: {}, lastHaircutDate: null },
 }
 
-type Tab = 'weekly' | 'readiness' | 'roadmap' | 'reflect'
+type Tab = 'weekly' | 'challenge' | 'readiness' | 'roadmap' | 'reflect'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('readiness')
@@ -38,8 +40,13 @@ export default function App() {
 
   const report = computeReadiness(state)
 
+  const challengeDay = state.challenge?.startDate
+    ? Math.max(1, Math.floor((Date.now() - new Date(state.challenge.startDate).getTime()) / 86400000) + 1)
+    : 0
+
   const TABS: { id: Tab; label: string; alert?: boolean }[] = [
-    { id: 'weekly', label: 'This week' },
+    { id: 'weekly', label: 'Week' },
+    { id: 'challenge', label: challengeDay > 0 ? `Day ${challengeDay}` : 'Challenge' },
     { id: 'readiness', label: 'Readiness', alert: report.overdueGates.length > 0 },
     { id: 'roadmap', label: 'Roadmap' },
     { id: 'reflect', label: 'Reflect' },
@@ -92,6 +99,7 @@ export default function App() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
         {tab === 'weekly' && <WeeklyView state={state} onChange={setState} />}
+        {tab === 'challenge' && <ChallengeView state={state} onChange={setState} />}
         {tab === 'readiness' && <ReadinessView state={state} onChange={setState} />}
         {tab === 'roadmap' && <RoadmapView state={state} onChange={setState} />}
         {tab === 'reflect' && <ReflectionView state={state} onChange={setState} />}

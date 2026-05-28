@@ -51,6 +51,17 @@ export interface Gate {
   done: boolean
 }
 
+export interface ChallengeDay {
+  [itemId: string]: boolean   // true = done, false = explicitly missed
+}
+
+export interface ChallengeState {
+  startDate: string | null
+  daily: Record<string, ChallengeDay>   // 'YYYY-MM-DD' → item checks
+  weekly: Record<string, ChallengeDay>  // week-Monday-ISO → item checks
+  lastHaircutDate: string | null
+}
+
 export interface AppState {
   weeks: Record<string, WeekState>
   reflections: Record<string, Reflection>
@@ -58,6 +69,7 @@ export interface AppState {
   gates: Record<string, boolean>   // gateId -> done
   leetcodeCount: number            // exact count — key signal
   ragModulesCount: number          // exact count of DL.AI modules done
+  challenge: ChallengeState
 }
 
 export interface Milestone {
