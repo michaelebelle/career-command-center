@@ -52,7 +52,7 @@ export interface Gate {
 }
 
 export interface ChallengeDay {
-  [itemId: string]: boolean   // true = done, false = explicitly missed
+  [itemId: string]: boolean | number
 }
 
 export interface ChallengeState {
