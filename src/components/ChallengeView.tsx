@@ -2,194 +2,193 @@
 
 import { useState } from 'react'
 import type { AppState, ChallengeState } from '@/types'
-import { ProgressBar } from './ProgressBar'
+
+// ── Constants ──────────────────────────────────────────────────────────────
+export const CHALLENGE_START = '2026-06-23'
+export const CHALLENGE_END   = '2026-08-22'
+const TOTAL_DAYS = 60
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function todayISO() { return new Date().toISOString().slice(0, 10) }
-
-function yesterdayISO() {
-  const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10)
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
 }
 
-function mondayISO(offset = 0) {
+function mondayOfWeek() {
   const d = new Date()
-  d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1) + offset * 7)
+  const day = d.getDay()
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
   return d.toISOString().slice(0, 10)
 }
 
 function daysBetween(a: string, b: string) {
-  return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
+  return Math.floor(
+    (new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000
+  )
 }
 
-function currentDay(startDate: string) {
-  return Math.max(1, daysBetween(startDate, todayISO()) + 1)
+function fmtShort(iso: string) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// ── Challenge data ─────────────────────────────────────────────────────────
-
-type FeedTag = { label: string; cls: string }
-
-interface Item { id: string; label: string; sub: string; feeds: FeedTag[] }
-
-// "feeds" tags use existing app category colors
-const F = {
-  careerPrep: { label: 'Career Prep',  cls: 'bg-amber-50  text-amber-700'  },
-  readiness:  { label: 'Readiness',    cls: 'bg-violet-50 text-violet-700' },
-  fitness:    { label: 'Fitness',      cls: 'bg-emerald-50 text-emerald-700' },
-  focus:      { label: 'Focus',        cls: 'bg-stone-100  text-stone-600'  },
-  clarity:    { label: 'Clarity',      cls: 'bg-sky-50     text-sky-700'   },
-  exitFund:   { label: 'Exit fund',    cls: 'bg-teal-50    text-teal-700'  },
+function fmtFull(iso: string) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-const DAILY_T1: Item[] = [
-  {
-    id: 'dopamine',
-    label: 'Dopamine clean',
-    sub: 'No social media · no looking up women · no porn',
-    feeds: [F.focus],
-  },
-  {
-    id: 'career-work',
-    label: '30+ min career work',
-    sub: 'Interview prep · AI/RAG · OMSCS · journal app',
-    feeds: [F.careerPrep, F.readiness],
-  },
-  {
-    id: 'weed-rule',
-    label: 'Weed rule',
-    sub: 'Never alone, never owned',
-    feeds: [F.clarity],
-  },
-]
-
-function hingeItem(day: number): Item {
-  const sub =
-    day <= 15 ? 'No Hinge today (Days 1–15)'
-    : day <= 30 ? 'Max 1x this week · 15 min · not after 8pm'
-    : 'Max 2x this week · 15 min · not after 8pm'
-  return { id: 'hinge', label: 'Hinge rule', sub, feeds: [F.focus] }
+function countChecked(entry: Record<string, boolean> | undefined) {
+  if (!entry) return 0
+  return Object.values(entry).filter(Boolean).length
 }
 
-const DAILY_T2: Item[] = [
+function isWin(entry: Record<string, boolean> | undefined) {
+  return countChecked(entry) >= 5
+}
+
+function computeStats(daily: Record<string, Record<string, boolean>>, today: string) {
+  if (today < CHALLENGE_START) return { won: 0, lost: 0, streak: 0, weekRate: null, total: 0 }
+
+  // Collect all completed days (start → yesterday)
+  const days: string[] = []
+  const cursor = new Date(CHALLENGE_START + 'T12:00:00')
+  const end    = new Date(today  + 'T12:00:00')
+  while (cursor < end) {
+    days.push(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  const won  = days.filter(d => isWin(daily[d])).length
+  const lost = days.length - won
+
+  // Current streak — consecutive wins going backwards from yesterday
+  let streak = 0
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (isWin(daily[days[i]])) streak++
+    else break
+  }
+
+  // This-week win rate (Mon → yesterday)
+  const wk = mondayOfWeek()
+  const wkDays = days.filter(d => d >= wk)
+  const weekRate = wkDays.length > 0
+    ? Math.round((wkDays.filter(d => isWin(daily[d])).length / wkDays.length) * 100)
+    : null
+
+  return { won, lost, streak, weekRate, total: days.length }
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
+const DAILY_ITEMS = [
   {
-    id: 'wakeup',
-    label: 'Up by 6am',
-    sub: 'Workdays · kickball/social exceptions ok',
-    feeds: [F.careerPrep],
+    id: 'work',
+    label: 'LeetCode or Journal App',
+    sub: 'LeetCode priority Mon–Thu',
   },
   {
-    id: 'skincare',
-    label: 'Night skincare',
-    sub: 'Azelaic + tretinoin',
-    feeds: [],
+    id: 'train',
+    label: 'Train or move',
+    sub: 'Lift · MMA · BJJ · run · jump rope · walk',
+  },
+  {
+    id: 'eat-clean',
+    label: 'Eat clean',
+    sub: 'Home-cooked · hit protein · no Starbucks meals',
+  },
+  {
+    id: 'water',
+    label: 'Water — 3L min',
+    sub: '4L on training days',
+  },
+  {
+    id: 'no-social-am',
+    label: 'No social first 30 min',
+    sub: 'Phone stays down after waking',
+  },
+  {
+    id: 'hard-rules',
+    label: 'Hard rules kept',
+    sub: 'No porn · no searching girls · Not Interested on all sexual content',
   },
 ]
 
-const WEEKLY_T1: Item[] = [
-  {
-    id: 'workouts',
-    label: '4+ workouts this week',
-    sub: '',
-    feeds: [F.fitness, F.focus],
-  },
+const WEEKLY_ITEMS = [
+  { id: 'lc-sessions', label: '2 LeetCode sessions' },
+  { id: 'social',      label: '1 social activity — real connection outside training' },
 ]
 
-const WEEKLY_T2: Item[] = [
-  {
-    id: 'martial-arts',
-    label: '2+ martial arts sessions',
-    sub: '',
-    feeds: [F.fitness],
-  },
-  {
-    id: 'alcohol',
-    label: 'Alcohol: social only, ≤1x',
-    sub: '',
-    feeds: [F.clarity],
-  },
-  {
-    id: 'eating-out',
-    label: 'Eating out: ≤2x',
-    sub: '',
-    feeds: [F.exitFund],
-  },
+const MILESTONES = [
+  { date: '2026-06-23', label: 'Challenge starts',         sub: 'Day 1' },
+  { date: '2026-07-11', label: "Mom's 60th — Beach House", sub: 'Day 19 · 4-week check-in' },
+  { date: '2026-08-22', label: 'Challenge complete',       sub: 'Day 60' },
 ]
 
-const REWARDS = [
-  { days: 7,  label: 'GT gear 🐝' },
-  { days: 14, label: 'Athletic PT 💪' },
-  { days: 30, label: 'Boxing lesson 🥊' },
-  { days: 60, label: 'Watch ⌚' },
-  { days: 90, label: 'Training vacation ✈️' },
-]
-
-// ── Shared check row ───────────────────────────────────────────────────────
-function CheckRow({
-  item,
-  checked,
-  onToggle,
-  warning,
+// ── Sub-components ─────────────────────────────────────────────────────────
+function DarkCheck({
+  label, sub, checked, onToggle,
 }: {
-  item: Item
-  checked: boolean
-  onToggle: () => void
-  warning?: string
+  label: string; sub?: string; checked: boolean; onToggle: () => void
 }) {
   return (
     <button
       onClick={onToggle}
-      className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
-        checked
-          ? 'bg-stone-50 border-stone-100 opacity-50'
-          : warning
-          ? 'bg-red-50 border-red-200'
-          : 'bg-white border-stone-100 hover:border-stone-200 hover:bg-stone-50'
+      className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+        checked ? 'opacity-40' : 'hover:bg-zinc-800'
       }`}
     >
-      {/* Checkbox */}
-      <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
-        checked ? 'bg-stone-800 border-stone-800' : warning ? 'border-red-400' : 'border-stone-300'
+      <div className={`mt-0.5 w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+        checked ? 'bg-white border-white' : 'border-zinc-600'
       }`}>
         {checked && (
-          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
-            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <svg className="w-2.5 h-2.5 text-zinc-900" fill="none" viewBox="0 0 10 8">
+            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </div>
-
-      {/* Label + feeds */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <p className={`text-sm font-medium ${checked ? 'line-through text-stone-400' : 'text-stone-900'}`}>
-            {item.label}
-          </p>
-          {item.feeds.length > 0 && (
-            <div className="flex gap-1 flex-wrap shrink-0">
-              {item.feeds.map(f => (
-                <span key={f.label} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${f.cls}`}>
-                  {f.label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        {item.sub && (
-          <p className="text-xs text-stone-400 mt-0.5">{item.sub}</p>
-        )}
-        {warning && (
-          <p className="text-xs text-red-500 font-medium mt-0.5">⚠ {warning}</p>
-        )}
+        <p className={`text-sm ${checked ? 'line-through text-zinc-500' : 'text-white'}`}>{label}</p>
+        {sub && <p className="text-xs text-zinc-600 mt-0.5">{sub}</p>}
       </div>
     </button>
   )
 }
 
-// ── Section label ──────────────────────────────────────────────────────────
-function SectionLabel({ dot, text }: { dot: string; text: string }) {
+function RulesCard() {
   return (
-    <div className="flex items-center gap-2 mb-2.5">
-      <div className={`w-2 h-2 rounded-full ${dot}`} />
-      <p className="text-xs font-medium uppercase tracking-wider text-stone-500">{text}</p>
+    <div className="bg-zinc-900 rounded-2xl p-4 space-y-4">
+      <div>
+        <p className="text-[10px] font-semibold text-red-400 uppercase tracking-widest mb-2.5">
+          Hard rules — No exceptions
+        </p>
+        <ul className="space-y-2">
+          {[
+            'No porn',
+            "No searching for girls on any platform unless they've engaged first (follow request, Hinge like)",
+            "No clicking on girls' profiles",
+            'Click "Not Interested" on all sexual content on all platforms',
+          ].map(rule => (
+            <li key={rule} className="flex gap-2.5 text-sm text-zinc-300">
+              <span className="text-zinc-700 shrink-0 mt-0.5">—</span>
+              {rule}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="border-t border-zinc-800 pt-4">
+        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-2.5">
+          The one exception
+        </p>
+        <ul className="space-y-2">
+          {[
+            'Alcohol only on weekends when Prince and Ryan are here. Everything else: substitute.',
+            'Never alone',
+            'Never to cope with stress, sadness, boredom, or loneliness',
+          ].map(rule => (
+            <li key={rule} className="flex gap-2.5 text-sm text-zinc-300">
+              <span className="text-zinc-700 shrink-0 mt-0.5">—</span>
+              {rule}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   )
 }
@@ -198,235 +197,263 @@ function SectionLabel({ dot, text }: { dot: string; text: string }) {
 interface Props { state: AppState; onChange: (s: AppState) => void }
 
 export function ChallengeView({ state, onChange }: Props) {
-  const [showBreak, setShowBreak] = useState(false)
+  const [showRules, setShowRules] = useState(false)
 
-  // Normalise — existing state may predate challenge field
-  const ch: ChallengeState = state.challenge ?? { startDate: null, daily: {}, weekly: {}, lastHaircutDate: null }
+  const ch: ChallengeState = state.challenge ?? {
+    startDate: null, daily: {}, weekly: {}, lastHaircutDate: null,
+  }
 
-  const saveChallenge = (next: ChallengeState) => onChange({ ...state, challenge: next })
+  const save = (next: ChallengeState) => onChange({ ...state, challenge: next })
 
-  const today     = todayISO()
-  const yesterday = yesterdayISO()
-  const wk        = mondayISO(0)
-  const lastWk    = mondayISO(-1)
+  const today = todayISO()
+  const wk    = mondayOfWeek()
 
-  const day         = ch.startDate ? currentDay(ch.startDate) : 0
-  const todayChecks = ch.daily[today]   ?? {}
-  const yChecks     = ch.daily[yesterday] ?? {}
-  const weekChecks  = ch.weekly[wk]     ?? {}
-  const lastWkChecks = ch.weekly[lastWk] ?? {}
+  const before   = today < CHALLENGE_START
+  const after    = today > CHALLENGE_END
+  const dayNum   = before ? 0 : Math.min(TOTAL_DAYS, daysBetween(CHALLENGE_START, today) + 1)
+  const daysLeft = after  ? 0 : Math.max(0, daysBetween(today, CHALLENGE_END))
+
+  const todayEntry = ch.daily[today] ?? {}
+  const weekEntry  = ch.weekly[wk]   ?? {}
+  const score      = countChecked(todayEntry)
+  const win        = score >= 5
+  const stats      = computeStats(ch.daily, today)
 
   const setDaily  = (id: string, v: boolean) =>
-    saveChallenge({ ...ch, daily:  { ...ch.daily,  [today]: { ...todayChecks, [id]: v } } })
+    save({ ...ch, daily:  { ...ch.daily,  [today]: { ...todayEntry, [id]: v } } })
   const setWeekly = (id: string, v: boolean) =>
-    saveChallenge({ ...ch, weekly: { ...ch.weekly, [wk]:   { ...weekChecks,  [id]: v } } })
+    save({ ...ch, weekly: { ...ch.weekly, [wk]:    { ...weekEntry,  [id]: v } } })
 
-  const missedYesterday = (id: string) =>
-    !!ch.startDate && yesterday >= ch.startDate && yChecks[id] === false
-
-  const missedLastWeek = (id: string) =>
-    !!ch.startDate && lastWkChecks[id] === false
-
-  const daysSinceHaircut = ch.lastHaircutDate ? daysBetween(ch.lastHaircutDate, today) : null
-  const nextReward = REWARDS.find(r => r.days > day)
-
-  // ── Not started ────────────────────────────────────────────────────────
-  if (!ch.startDate) {
+  // ── Pre-challenge ──────────────────────────────────────────────────────
+  if (before) {
+    const countdown = daysBetween(today, CHALLENGE_START)
     return (
-      <div className="py-8 text-center space-y-4">
-        <p className="text-xs font-mono text-stone-400 uppercase tracking-wider">Get Money Challenge</p>
-        <p className="text-lg font-medium text-stone-900">30–90 days. No excuses.</p>
-        <p className="text-sm text-stone-500 max-w-xs mx-auto leading-relaxed">
-          Daily discipline that feeds your career exit. Each habit is linked to the goal it builds.
-        </p>
-        <button
-          onClick={() => saveChallenge({ ...ch, startDate: today })}
-          className="bg-stone-900 text-white text-sm px-6 py-2.5 rounded-xl font-medium hover:bg-stone-700 transition-colors"
-        >
-          Start — Day 1
-        </button>
+      <div className="space-y-4">
+        <div className="bg-zinc-900 rounded-2xl p-6 text-center">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">
+            Get Money Challenge
+          </p>
+          <p className="text-5xl font-bold text-white mb-1">{countdown}</p>
+          <p className="text-zinc-400 text-sm mb-4">days until Day 1</p>
+          <p className="text-zinc-600 text-xs font-mono">
+            {fmtShort(CHALLENGE_START)} → {fmtShort(CHALLENGE_END)}
+          </p>
+        </div>
+        <RulesCard />
       </div>
     )
   }
 
-  const dailyT1 = [hingeItem(day), ...DAILY_T1]
-  const allDailyDone = [...dailyT1, ...DAILY_T2].filter(i => todayChecks[i.id]).length
-  const allDailyTotal = dailyT1.length + DAILY_T2.length
+  // ── Post-challenge ─────────────────────────────────────────────────────
+  if (after) {
+    return (
+      <div className="bg-zinc-900 rounded-2xl p-6 text-center space-y-2">
+        <p className="text-2xl font-bold text-white">60 days. Done.</p>
+        <p className="text-zinc-400 text-sm">
+          {stats.won} wins · {stats.lost} losses
+        </p>
+        <p className="text-zinc-600 text-xs">
+          {fmtFull(CHALLENGE_START)} → {fmtFull(CHALLENGE_END)}
+        </p>
+      </div>
+    )
+  }
+
+  // ── Active challenge ───────────────────────────────────────────────────
+  const pct = Math.round((dayNum / TOTAL_DAYS) * 100)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
 
-      {/* ── Compact header ── */}
-      <div className="bg-stone-50 border border-stone-100 rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
+      {/* ── Header card ── */}
+      <div className="bg-zinc-900 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-xs text-stone-400 font-mono uppercase tracking-wider mb-0.5">Get Money</p>
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">
+              Get Money Challenge
+            </p>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-stone-900">Day {day}</span>
-              <span className="text-sm text-stone-400">/ 90</span>
+              <span className="text-4xl font-bold text-white">{dayNum}</span>
+              <span className="text-zinc-500 text-base">/ {TOTAL_DAYS}</span>
             </div>
           </div>
           <div className="text-right">
-            {nextReward ? (
-              <>
-                <p className="text-xs text-stone-400">Next reward</p>
-                <p className="text-sm font-medium text-stone-700">{nextReward.label}</p>
-                <p className="text-xs font-mono text-stone-400">{nextReward.days - day}d</p>
-              </>
-            ) : (
-              <p className="text-sm font-medium text-emerald-600">All rewards earned 🎉</p>
-            )}
-          </div>
-        </div>
-        <ProgressBar value={day} max={90} color="bg-stone-800" />
-
-        {/* Reward strip */}
-        <div className="flex gap-1.5 flex-wrap">
-          {REWARDS.map(r => (
-            <span
-              key={r.days}
-              className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-all ${
-                day >= r.days
-                  ? 'bg-stone-800 text-white'
-                  : 'bg-stone-100 text-stone-400'
-              }`}
-            >
-              {r.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Daily progress pill ── */}
-      <div className="flex items-center justify-between px-1">
-        <p className="text-xs font-mono text-stone-400 uppercase tracking-wider">Today</p>
-        <span className="text-xs font-medium text-stone-500 font-mono">
-          {allDailyDone}/{allDailyTotal} checked
-        </span>
-      </div>
-
-      {/* ── Tier 1 daily ── */}
-      <div>
-        <SectionLabel dot="bg-red-400" text="Tier 1 — Cannot break" />
-        <div className="space-y-2">
-          {dailyT1.map(item => (
-            <CheckRow
-              key={item.id}
-              item={item}
-              checked={!!todayChecks[item.id]}
-              onToggle={() => setDaily(item.id, !todayChecks[item.id])}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Tier 2 daily ── */}
-      <div>
-        <SectionLabel dot="bg-amber-400" text="Tier 2 — Can miss, not twice in a row" />
-        <div className="space-y-2">
-          {DAILY_T2.map(item => (
-            <CheckRow
-              key={item.id}
-              item={item}
-              checked={!!todayChecks[item.id]}
-              onToggle={() => setDaily(item.id, !todayChecks[item.id])}
-              warning={missedYesterday(item.id) ? 'Missed yesterday — cannot skip today' : undefined}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Weekly ── */}
-      <div>
-        <p className="text-xs font-mono text-stone-400 uppercase tracking-wider mb-2.5">This week — due Sunday</p>
-        <SectionLabel dot="bg-red-400" text="Tier 1" />
-        <div className="space-y-2 mb-4">
-          {WEEKLY_T1.map(item => (
-            <CheckRow
-              key={item.id}
-              item={item}
-              checked={!!weekChecks[item.id]}
-              onToggle={() => setWeekly(item.id, !weekChecks[item.id])}
-            />
-          ))}
-        </div>
-        <SectionLabel dot="bg-amber-400" text="Tier 2" />
-        <div className="space-y-2">
-          {WEEKLY_T2.map(item => (
-            <CheckRow
-              key={item.id}
-              item={item}
-              checked={!!weekChecks[item.id]}
-              onToggle={() => setWeekly(item.id, !weekChecks[item.id])}
-              warning={missedLastWeek(item.id) ? 'Missed last week — cannot skip this week' : undefined}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Haircut tracker ── */}
-      <div className="border border-stone-100 rounded-xl p-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-stone-700">Haircut tracker <span className="font-normal text-stone-400">· Tier 2, every 2 weeks</span></p>
-          {ch.lastHaircutDate ? (
-            <p className={`text-xs mt-0.5 font-mono ${
-              daysSinceHaircut! >= 21 ? 'text-red-500'
-              : daysSinceHaircut! >= 14 ? 'text-amber-500'
-              : 'text-stone-400'
-            }`}>
-              {daysSinceHaircut}d ago
-              {daysSinceHaircut! >= 21 && ' — overdue'}
-              {daysSinceHaircut! >= 14 && daysSinceHaircut! < 21 && ' — book it'}
+            <p className="text-2xl font-bold text-zinc-500">{daysLeft}</p>
+            <p className="text-xs text-zinc-600">days left</p>
+            <p className="text-[10px] font-mono text-zinc-700 mt-1">
+              ends {fmtShort(CHALLENGE_END)}
             </p>
-          ) : (
-            <p className="text-xs text-stone-400 mt-0.5">Not logged yet</p>
-          )}
-        </div>
-        <button
-          onClick={() => saveChallenge({ ...ch, lastHaircutDate: today })}
-          className="text-xs border border-stone-200 rounded-lg px-3 py-1.5 text-stone-600 hover:bg-stone-50 transition-colors shrink-0"
-        >
-          Log today
-        </button>
-      </div>
-
-      {/* ── Protect energy reminders ── */}
-      <div className="border-l-2 border-stone-200 pl-4 py-1 space-y-1">
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-wider">Protect energy</p>
-        <p className="text-xs text-stone-400">No hero mode at Wells · Stop comparing · Move when stressed</p>
-      </div>
-
-      {/* ── Rule break ── */}
-      <div className="text-center space-y-3">
-        <button
-          onClick={() => setShowBreak(!showBreak)}
-          className="text-xs text-stone-300 hover:text-red-500 transition-colors underline underline-offset-2"
-        >
-          Log a rule break
-        </button>
-        {showBreak && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-left space-y-3">
-            <p className="text-sm font-medium text-red-800">🚨 Consequences</p>
-            {day <= 15 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-red-700">Relapse (Days 1–15):</p>
-                <p className="text-xs text-red-600 pl-2">— Delete Hinge for 30 days</p>
-                <p className="text-xs text-red-600 pl-2">— 6-mile run or 100 burpees</p>
-                <a
-                  href={`mailto:ebellem007@gmail.com?subject=GMC — I owe Keerat $20&body=Broke the rules on Day ${day}. I owe Keerat $20.`}
-                  className="mt-2 flex items-center justify-center gap-1 bg-red-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Send accountability email →
-                </a>
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-medium text-red-700">Hinge rule break:</p>
-              <p className="text-xs text-red-600 pl-2">— 7-day Hinge ban</p>
-            </div>
           </div>
-        )}
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-white rounded-full transition-all duration-700"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        {/* Milestone ticks */}
+        <div className="relative mt-1.5 h-2">
+          {MILESTONES.slice(1, -1).map(m => {
+            const mDay = daysBetween(CHALLENGE_START, m.date) + 1
+            const left = (mDay / TOTAL_DAYS) * 100
+            return (
+              <div
+                key={m.date}
+                className="absolute top-0 w-px h-2 bg-zinc-700"
+                style={{ left: `${left}%` }}
+              />
+            )
+          })}
+        </div>
       </div>
+
+      {/* ── Today's check-in ── */}
+      <div className="bg-zinc-900 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Today</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white font-mono">{score} / 6</span>
+            {score > 0 && (
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                win
+                  ? 'bg-emerald-500 text-white'
+                  : score >= 4
+                  ? 'bg-zinc-700 text-zinc-300'
+                  : 'bg-zinc-800 text-zinc-500'
+              }`}>
+                {win ? 'Win' : 'Keep going'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Score bar */}
+        <div className="h-0.5 bg-zinc-800 rounded-full overflow-hidden mb-3">
+          <div
+            className={`h-full rounded-full transition-all ${win ? 'bg-emerald-500' : 'bg-zinc-500'}`}
+            style={{ width: `${(score / 6) * 100}%` }}
+          />
+        </div>
+
+        <div className="space-y-0.5">
+          {DAILY_ITEMS.map(item => (
+            <DarkCheck
+              key={item.id}
+              label={item.label}
+              sub={item.sub}
+              checked={!!todayEntry[item.id]}
+              onToggle={() => setDaily(item.id, !todayEntry[item.id])}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Weekly minimums ── */}
+      <div className="bg-zinc-900 rounded-2xl p-4">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">
+          This week — resets Monday
+        </p>
+        <div className="space-y-0.5">
+          {WEEKLY_ITEMS.map(item => (
+            <DarkCheck
+              key={item.id}
+              label={item.label}
+              checked={!!weekEntry[item.id]}
+              onToggle={() => setWeekly(item.id, !weekEntry[item.id])}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Stats ── */}
+      {stats.total > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-zinc-900 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-white">{stats.won}</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Won</p>
+            <p className="text-xs text-zinc-700">{stats.lost} lost</p>
+          </div>
+          <div className="bg-zinc-900 rounded-xl p-3 text-center">
+            <p className={`text-2xl font-bold ${stats.streak > 0 ? 'text-emerald-400' : 'text-white'}`}>
+              {stats.streak}
+            </p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Streak</p>
+            <p className="text-xs text-zinc-700">days</p>
+          </div>
+          <div className="bg-zinc-900 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-white">
+              {stats.weekRate != null ? `${stats.weekRate}%` : '—'}
+            </p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">This week</p>
+            <p className="text-xs text-zinc-700">win rate</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Milestones ── */}
+      <div className="bg-zinc-900 rounded-2xl p-4">
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">
+          Milestones
+        </p>
+        <div className="space-y-0">
+          {MILESTONES.map((m, i) => {
+            const reached = today >= m.date
+            const isCurrent = i < MILESTONES.length - 1 &&
+              today >= m.date &&
+              today < MILESTONES[i + 1].date
+            return (
+              <div key={m.date} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ring-2 transition-all ${
+                    reached
+                      ? 'bg-emerald-500 ring-emerald-500/30'
+                      : isCurrent
+                      ? 'bg-white ring-white/20'
+                      : 'bg-zinc-700 ring-zinc-700/30'
+                  }`} />
+                  {i < MILESTONES.length - 1 && (
+                    <div className={`w-px flex-1 mt-1 mb-1 min-h-[20px] ${
+                      reached ? 'bg-emerald-800' : 'bg-zinc-800'
+                    }`} />
+                  )}
+                </div>
+                <div className="pb-4">
+                  <p className={`text-sm font-medium leading-tight ${
+                    reached ? 'text-white' : 'text-zinc-600'
+                  }`}>
+                    {m.label}
+                  </p>
+                  <p className="text-xs text-zinc-700 font-mono mt-0.5">
+                    {fmtShort(m.date)} · {m.sub}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Rules toggle ── */}
+      <button
+        onClick={() => setShowRules(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 rounded-xl transition-colors hover:bg-zinc-800"
+      >
+        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+          Rules reference
+        </p>
+        <span className="text-zinc-600 text-xs">{showRules ? '▲' : '▼'}</span>
+      </button>
+
+      {showRules && <RulesCard />}
+
+      {/* ── Guiding principle ── */}
+      <p className="text-center text-xs text-zinc-400 leading-relaxed pb-2">
+        The goal is not perfection.<br />
+        Win more days than you lose and become someone who keeps promises to himself.
+      </p>
     </div>
   )
 }

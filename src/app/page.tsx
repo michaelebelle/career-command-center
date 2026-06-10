@@ -8,7 +8,7 @@ import { WeeklyView } from '@/components/WeeklyView'
 import { RoadmapView } from '@/components/RoadmapView'
 import { ReflectionView } from '@/components/ReflectionView'
 import { ReadinessView } from '@/components/ReadinessView'
-import { ChallengeView } from '@/components/ChallengeView'
+import { ChallengeView, CHALLENGE_START, CHALLENGE_END } from '@/components/ChallengeView'
 import { computeReadiness } from '@/lib/readiness'
 
 const INITIAL_STATE: AppState = {
@@ -40,8 +40,11 @@ export default function App() {
 
   const report = computeReadiness(state)
 
-  const challengeDay = state.challenge?.startDate
-    ? Math.max(1, Math.floor((Date.now() - new Date(state.challenge.startDate).getTime()) / 86400000) + 1)
+  const _today = new Date().toISOString().slice(0, 10)
+  const challengeDay = _today >= CHALLENGE_START && _today <= CHALLENGE_END
+    ? Math.min(60, Math.floor((_today > CHALLENGE_START
+        ? (new Date(_today + 'T12:00:00').getTime() - new Date(CHALLENGE_START + 'T12:00:00').getTime()) / 86400000
+        : 0) + 1))
     : 0
 
   const TABS: { id: Tab; label: string; alert?: boolean }[] = [
